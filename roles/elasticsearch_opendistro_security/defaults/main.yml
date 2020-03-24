@@ -1,0 +1,33 @@
+---
+es_group: "elasticsearch"
+es_conf_dir: "/etc/elasticsearch"
+es_home: "/usr/share/elasticsearch"
+es_plugin_bin_path: /usr/share/elasticsearch/bin/elasticsearch-plugin
+es_sec_plugin_conf_path: /usr/share/elasticsearch/plugins/opendistro_security/securityconfig
+es_sec_plugin_tools_path: /usr/share/elasticsearch/plugins/opendistro_security/tools
+
+admin_dn: CN=admin
+
+#TODO : add dn suffix to nodes
+
+opendistro_security_version: 1.4.0.0
+opendistro_security_download_url: https://d3g5vo6xdbdb9a.cloudfront.net/downloads/elasticsearch-plugins/opendistro-security/
+admin_password: Admin123
+kibanaserver_password: Admin123
+opendistro_security_kibana_download_url: https://d3g5vo6xdbdb9a.cloudfront.net/downloads/kibana-plugins/opendistro-security/
+
+
+# LDAP Configuration
+pemtrustedcas_filepath: /etc/elasticsearch/ca_ldap.crt
+enable_ssl: true
+verify_hostnames: true
+ldap_hosts:
+  - example.com:636
+bind_dn: 'uid=admin,cn=users,cn=accounts,dc=EXAMPLE,dc=COM'
+bind_dn_password: 'admin'
+userbase: 'cn=users,cn=accounts,dc=EXAMPLE,dc=COM'
+usersearch: '(uid={0})'
+username_attribute: uid
+rolebase: 'cn=groups,cn=accounts,dc=ml,dc=com'
+rolesearch: '(member={0})'
+rolename: cn

@@ -1,0 +1,95 @@
+---
+
+_meta:
+  type: "config"
+  config_version: 2
+
+config:
+  dynamic:
+    # Set filtered_alias_mode to 'disallow' to forbid more than 2 filtered aliases per index
+    # Set filtered_alias_mode to 'warn' to allow more than 2 filtered aliases per index but warns about it (default)
+    # Set filtered_alias_mode to 'nowarn' to allow more than 2 filtered aliases per index silently
+    #filtered_alias_mode: warn
+    #do_not_fail_on_forbidden: false
+    #kibana:
+    # Kibana multitenancy
+    #multitenancy_enabled: true
+    #server_username: kibanaserver
+    #index: '.kibana'
+    http:
+      anonymous_auth_enabled: false
+      xff:
+        enabled: false
+        internalProxies: '192\.168\.0\.10|192\.168\.0\.11' # regex pattern
+    authc:
+      basic_internal_auth_domain:
+        description: "Authenticate via HTTP Basic against internal users database"
+        http_enabled: true
+        transport_enabled: true
+        order: 1
+        http_authenticator:
+          type: basic
+          challenge: true
+        authentication_backend:
+          type: intern
+      ldap:
+        description: "Authenticate via LDAP or Active Directory"
+        http_enabled: true
+        transport_enabled: true
+        order: 2
+        http_authenticator:
+          type: basic
+          challenge: true
+        authentication_backend:
+          # LDAP authentication backend (authenticate users against a LDAP or Active Directory)
+          type: ldap
+          config:
+            pemtrustedcas_filepath: '{{ pemtrustedcas_filepath }}'
+            # enable ldaps
+            enable_ssl: {{ enable_ssl }}
+            # enable start tls, enable_ssl should be false
+            enable_start_tls: false
+            # send client certificate
+            enable_ssl_client_auth: false
+            # verify ldap hostname
+            verify_hostnames: true
+            hosts:
+{% for item in ldap_hosts %}
+            - {{ item }}
+{% endfor %}
+            bind_dn: '{{ bind_dn }}'
+            password: '{{ bind_dn_password }}'
+            userbase: '{{ userbase }}'
+            # Filter to search for users (currently in the whole subtree beneath userbase)
+            # {0} is substituted with the username
+            usersearch: '{{ usersearch }}'
+            # Use this attribute from the user as username (if not set then DN is used)
+            username_attribute: {{ username_attribute }}
+    authz:
+      roles_from_myldap:
+        description: "Authorize via LDAP or Active Directory"
+        http_enabled: true
+        transport_enabled: true
+        authorization_backend:
+          type: ldap
+          config:
+            enable_ssl: {{ enable_ssl }}
+            pemtrustedcas_filepath: '{{ pemtrustedcas_filepath }}'
+            enable_start_tls: false
+            enable_ssl_client_auth: false
+            verify_hostnames: true
+            hosts:
+{% for item in ldap_hosts %}
+              - {{ item }}
+{% endfor %}
+            bind_dn: '{{ bind_dn }}'
+            password: '{{ bind_dn_password }}'
+            userbase: '{{ userbase }}'
+            usersearch: '{{ usersearch }}'
+            username_attribute: {{ username_attribute }}
+            rolebase: '{{ rolebase }}'
+            rolesearch: '{{ rolesearch }}'
+            userroleattribute: null
+            userrolename: none
+            rolename: '{{ rolename }}'
+            resolve_nested_roles: true

@@ -1,0 +1,133 @@
+---
+
+- name: Security Plugin Install | Download Opendistro Elasticsearch security plugin {{ opendistro_security_version }}
+  get_url:
+    url: "{{ opendistro_security_download_url }}opendistro_security-{{ opendistro_security_version }}.zip"
+    dest: "{{ es_home  }}/opendistro_security-{{ opendistro_security_version }}.zip"
+
+# TODO : check if the right version is installed or not...
+
+- name: Security Plugin Install | Check if Opendistro-security is already installed
+  shell: "{{ es_plugin_bin_path }} list | grep opendistro_security"
+  failed_when: False
+  register: installed
+
+- name: Security Plugin Install | Install the Opendistro security plugin
+  command: "{{ es_plugin_bin_path }} install -b file://{{ es_home }}/opendistro_security-{{ opendistro_security_version }}.zip"
+  when: not ('opendistro_security' in installed.stdout)
+  register: install
+
+- name: Security Plugin Install | Create local temporary directory for certificates generation
+  local_action:
+    module: file
+    path: /tmp/opendistro-nodecerts
+    state: directory
+  run_once: true
+
+- name: Security Plugin Install | Generate nodes's certificates
+  local_action:
+    module: script
+    cmd: scripts/create-node-certs.sh {{ ansible_fqdn }} {{ ca_key_file }} {{ ca_key_pass }} {{ ca_crt_file }}
+    chdir: /tmp/opendistro-nodecerts
+
+- name: Security Plugin Install | Generate admin's certificates
+  local_action:
+    module: script
+    cmd: scripts/create-admin-certs.sh {{ admin_dn }} {{ ca_key_file }} {{ ca_key_pass }} {{ ca_crt_file }} 2> /tmp/logs.txt
+    chdir: /tmp/opendistro-nodecerts
+  run_once: true
+
+- name: Security Plugin Install | Copy the node & admin certificates to Elasticsearch cluster
+  copy:
+    src: "{{ item }}"
+    dest: /etc/elasticsearch/
+    mode: 0600
+    owner: elasticsearch
+  with_items:
+    - "/tmp/opendistro-nodecerts/{{ ansible_fqdn }}.key"
+    - "/tmp/opendistro-nodecerts/{{ ansible_fqdn }}.crt"
+    - "/tmp/opendistro-nodecerts/admin.key"
+    - "/tmp/opendistro-nodecerts/admin.crt"
+
+- name: Security Plugin Install | Copy public CA certificate to Elasticsearch cluster
+  copy:
+    src: "{{ ca_crt_file }}"
+    dest: /etc/elasticsearch/ca.crt
+    mode: 0600
+    owner: elasticsearch
+  when: install.changed
+
+- name: Security Plugin Install | Copy public LDAP CA certificate to Elasticsearch cluster
+  copy:
+    src: "{{ ca_ldap_crt_file }}"
+    dest: /etc/elasticsearch/ca_ldap.crt
+    mode: 0600
+    owner: elasticsearch
+
+- name: Security Plugin Install | Remove the local temporary directory
+  local_action:
+    module: file
+    path: /tmp/opendistro-nodecerts
+    state: absent
+  run_once: true
+
+- name: Security Plugin Install | Set ssl configurations
+  blockinfile:
+    path: /etc/elasticsearch/elasticsearch.yml
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+    block: |
+      opendistro_security.ssl.transport.enabled: true
+      opendistro_security.ssl.transport.enforce_hostname_verification: true
+      opendistro_security.ssl.transport.pemcert_filepath: /etc/elasticsearch/{{ ansible_fqdn }}.crt
+      opendistro_security.ssl.transport.pemkey_filepath: /etc/elasticsearch/{{ ansible_fqdn }}.key
+      opendistro_security.ssl.transport.pemtrustedcas_filepath: /etc/elasticsearch/ca.crt
+      opendistro_security.ssl.http.enabled: true
+      opendistro_security.ssl.http.pemcert_filepath: /etc/elasticsearch/{{ ansible_fqdn }}.crt
+      opendistro_security.ssl.http.pemkey_filepath: /etc/elasticsearch/{{ ansible_fqdn }}.key
+      opendistro_security.ssl.http.pemtrustedcas_filepath: /etc/elasticsearch/ca.crt
+      opendistro_security.authcz.admin_dn:
+        - {{ admin_dn }}
+      opendistro_security.nodes_dn:
+      {% for host in groups['_elasticsearch_'] %}
+        - 'CN={{ hostvars[host]['ansible_fqdn'] }}'
+      {% endfor %}
+      opendistro_security.ssl.http.clientauth_mode: NONE
+      opendistro_security.restapi.roles_enabled: ['all_access']
+
+- name: Security Plugin Install | Set LDAP configuration
+  template:
+    src: config.yml
+    dest: "{{ es_sec_plugin_conf_path }}/config.yml"
+    mode: 0644
+
+- name: Security Plugin Install | Restart elasticsearch with security configuration
+  systemd:
+    name: elasticsearch
+    state: restarted
+
+- name: Security Plugin Install | Copy the opendistro security internal users template
+  template:
+    src: internal_users.yml
+    dest: "{{ es_sec_plugin_conf_path }}/internal_users.yml"
+    mode: 0644
+
+- name: Security Plugin Install | Set the Admin user password
+  shell: >
+    sed -i 's,{{ admin_password }},'$(sh {{ es_sec_plugin_tools_path }}/hash.sh -p {{ admin_password }} | tail -1)','
+    {{ es_sec_plugin_conf_path }}/internal_users.yml
+
+- name: Security Plugin Install | Set the kibanaserver user pasword
+  shell: >
+    sed -i 's,{{ kibanaserver_password }},'$(sh {{ es_sec_plugin_tools_path }}/hash.sh -p {{ kibanaserver_password }} | tail -1)','
+    {{ es_sec_plugin_conf_path }}/internal_users.yml
+
+- name: Security Plugin Install | Initialize the opendistro security index in elasticsearch
+  shell: >
+    sh {{ es_sec_plugin_tools_path }}/securityadmin.sh
+    -cacert {{ es_conf_dir }}/ca.crt
+    -cert {{ es_conf_dir }}/admin.crt
+    -key {{ es_conf_dir }}/admin.key
+    -cd {{ es_sec_plugin_conf_path }}/
+    -nhnv -icl
+    -h {{ ansible_fqdn }}
+  run_once: true

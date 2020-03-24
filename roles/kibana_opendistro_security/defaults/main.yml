@@ -1,0 +1,13 @@
+---
+
+kb_conf_dir: "/etc/kibana"
+kb_plugin_bin_path: /usr/share/kibana/bin/kibana-plugin
+
+# SSL configuration
+ca_key_file: ./common/ca/CARoot.key
+ca_key_pass: 'keypass'
+ca_crt_file: ./common/ca/CARoot.crt
+admin_dn: CN=admin
+opendistro_security_version: 1.4.0.0
+kibanaserver_password: Admin123
+opendistro_security_kibana_download_url: https://d3g5vo6xdbdb9a.cloudfront.net/downloads/kibana-plugins/opendistro-security/

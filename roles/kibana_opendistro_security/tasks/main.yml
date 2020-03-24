@@ -1,0 +1,77 @@
+---
+- name: Security Plugin Install | Download Opendistro Kibana security plugin {{ opendistro_security_version }}
+  get_url:
+    url: "{{ opendistro_security_kibana_download_url }}opendistro_security_kibana_plugin-{{ opendistro_security_version }}.zip"
+    dest: "/usr/share/kibana/opendistro_security-{{ opendistro_security_version }}.zip"
+  register: download
+
+- name: Security Plugin Install | Check if Opendistro-security is already installed
+  shell: "sudo -u kibana {{ kb_plugin_bin_path }} list | grep opendistro_security"
+  failed_when: False
+  register: installed
+
+- name: Security Plugin Install | Install the Opendistro security plugin in kibana
+  command: "sudo -u kibana {{ kb_plugin_bin_path }} install file:///usr/share/kibana/opendistro_security-{{ opendistro_security_version }}.zip"
+  when: not ('opendistro_security' in installed.stdout)
+
+- name: Security Plugin Install | Create local temporary directory for certificates generation
+  local_action:
+    module: file
+    path: /tmp/opendistro-kibanacerts
+    state: directory
+  run_once: true
+
+- name: Security Plugin Install | Generate kibana certificates
+  local_action:
+    module: script
+    cmd: scripts/create-kibana-certs.sh {{ ansible_fqdn }} {{ ca_key_file }} {{ ca_key_pass }} {{ ca_crt_file }}
+    chdir: /tmp/opendistro-kibanacerts
+
+- name: Security Plugin Install | Copy the node & admin certificates to Elasticsearch cluster
+  copy:
+    src: "{{ item }}"
+    dest: "{{ kb_conf_dir }}"
+    mode: 0600
+    owner: kibana
+  with_items:
+    - "/tmp/opendistro-kibanacerts/{{ ansible_fqdn }}.key"
+    - "/tmp/opendistro-kibanacerts/{{ ansible_fqdn }}.crt"
+
+- name: Security Plugin Install | Copy public CA certificate to Kibana
+  copy:
+    src: "{{ ca_crt_file }}"
+    dest: "{{ kb_conf_dir }}/ca.crt"
+    mode: 0600
+    owner: kibana
+    group: kibana
+
+- name: Security Plugin Install | Remove the local temporary directory
+  local_action:
+    module: file
+    path: /tmp/opendistro-kibanacerts
+    state: absent
+  run_once: true
+
+- name: Security Plugin Install | Set ssl configurations
+  blockinfile:
+    path: "{{ kb_conf_dir }}/kibana.yml"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK"
+    block: |
+      opendistro_security.multitenancy.enabled: true
+      elasticsearch.requestHeadersWhitelist: [ 'authorization', 'securitytenant' ]
+      opendistro_security.multitenancy.tenants.enable_global: true
+      opendistro_security.multitenancy.tenants.enable_private: true
+      opendistro_security.multitenancy.enable_filter: true
+      opendistro_security.multitenancy.tenants.preferred: ["Private", "Global"]
+      opendistro_security.readonly_mode.roles: ["kibana_read_only"]
+      elasticsearch.ssl.certificateAuthorities: [ "{{ kb_conf_dir }}/ca.crt" ]
+      server.ssl.enabled: true
+      server.ssl.certificate: {{ kb_conf_dir }}/{{ ansible_fqdn }}.crt
+      server.ssl.key: {{ kb_conf_dir }}/{{ ansible_fqdn }}.key
+      elasticsearch.username: "kibanaserver"
+      elasticsearch.password: "{{ kibanaserver_password }}"
+
+- name: Security Plugin Install | Restart kibana with security configuration
+  systemd:
+    name: kibana
+    state: restarted
