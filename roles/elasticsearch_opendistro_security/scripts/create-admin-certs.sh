@@ -1,4 +1,3 @@
-#!/bin/bash
 
 DN=$1
 CA_key=$2

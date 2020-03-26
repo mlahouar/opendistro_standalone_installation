@@ -1,4 +1,3 @@
-#!/bin/bash
 
 CN=$1
 CA_key=$2

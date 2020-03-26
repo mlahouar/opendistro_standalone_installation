@@ -93,3 +93,6 @@ config:
             userrolename: none
             rolename: '{{ rolename }}'
             resolve_nested_roles: true
+            skip_users:
+              - kibanaserver
+              - admin
