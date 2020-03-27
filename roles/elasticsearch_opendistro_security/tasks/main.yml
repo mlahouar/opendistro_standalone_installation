@@ -108,6 +108,9 @@
 - name: Wait for elasticsearch to startup
   wait_for: host={{ ansible_fqdn }} port={{ 9200 }} delay=5 connect_timeout=1
 
+- name: Wait {{ es_api_sleep }} seconds for the cluster to come up
+  command: "sleep {{ es_api_sleep }}"
+
 - name: Security Plugin Install | Copy the opendistro security internal users template
   template:
     src: internal_users.yml
