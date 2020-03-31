@@ -91,7 +91,7 @@
       {% for host in groups['_elasticsearch_'] %}
         - 'CN={{ hostvars[host]['ansible_fqdn'] }}'
       {% endfor %}
-      opendistro_security.ssl.http.clientauth_mode: NONE
+      opendistro_security.ssl.http.clientauth_mode: OPTIONAL
       opendistro_security.restapi.roles_enabled: ['all_access']
 
 - name: Security Plugin Install | Set LDAP configuration
