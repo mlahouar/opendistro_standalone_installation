@@ -9,13 +9,13 @@ _meta:
 # Define your internal users here
 
 admin:
-  hash: "{{ admin_password }}"
+  hash: "{{ encrypted_admin_password }}"
   reserved: true
   backend_roles:
   - "admin"
   description: "admin user"
 
 kibanaserver:
-  hash: "{{ kibanaserver_password }}"
+  hash: "{{ encrypted_kibanaserver_password }}"
   reserved: true
   description: "kibanaserver user"
