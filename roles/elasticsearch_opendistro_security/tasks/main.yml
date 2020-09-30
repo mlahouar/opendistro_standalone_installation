@@ -111,21 +111,23 @@
 - name: Wait {{ es_api_sleep }} seconds for the cluster to come up
   command: "sleep {{ es_api_sleep }}"
 
+- name: Security Plugin Install | Set the Admin user password
+  shell: "sh {{ es_sec_plugin_tools_path }}/hash.sh -p '{{ admin_password }}' | tail -1"
+  register: encrypted_admin_password
+
+- name: Security Plugin Install | Set the kibanaserver user pasword
+  shell: "sh {{ es_sec_plugin_tools_path }}/hash.sh -p '{{ kibanaserver_password }}' | tail -1"
+  register: encrypted_kibanaserver_password
+
+- set_fact:
+    encrypted_admin_password: "{{ encrypted_admin_password.stdout }}"
+    encrypted_kibanaserver_password: "{{ encrypted_kibanaserver_password.stdout }}"
+
 - name: Security Plugin Install | Copy the opendistro security internal users template
   template:
     src: internal_users.yml
     dest: "{{ es_sec_plugin_conf_path }}/internal_users.yml"
     mode: 0644
-
-- name: Security Plugin Install | Set the Admin user password
-  shell: >
-    sed -i 's,{{ admin_password }},'$(sh {{ es_sec_plugin_tools_path }}/hash.sh -p {{ admin_password }} | tail -1)','
-    {{ es_sec_plugin_conf_path }}/internal_users.yml
-
-- name: Security Plugin Install | Set the kibanaserver user pasword
-  shell: >
-    sed -i 's,{{ kibanaserver_password }},'$(sh {{ es_sec_plugin_tools_path }}/hash.sh -p {{ kibanaserver_password }} | tail -1)','
-    {{ es_sec_plugin_conf_path }}/internal_users.yml
 
 - name: Security Plugin Install | Initialize the opendistro security index in elasticsearch
   shell: >
